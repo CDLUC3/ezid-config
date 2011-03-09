@@ -44,11 +44,11 @@ ARGV="$@"
 . /n2t/apache/WARTS/env.sh
 #
 # the path to your httpd binary, including options if necessary
-HTTPD='/n2t/sw/httpd/bin/httpd -f /n2t/apache/conf/httpd.conf'
+HTTPD='/opt/csw/apache2/sbin/httpd -f /n2t/apache/conf/httpd.conf'
 #
 # pick up any necessary environment variables
-if test -f /n2t/sw/httpd/bin/envvars; then
-  . /n2t/sw/httpd/bin/envvars
+if test -f /opt/csw/apache2/sbin/envvars; then
+  . /opt/csw/apache2/sbin/envvars
 fi
 #
 # a command that outputs a formatted text version of the HTML at the
