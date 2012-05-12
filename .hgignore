@@ -1,3 +1,4 @@
 ^ezid/.*
 ^logs/.*
 ^WARTS/.*
+\.pyc$

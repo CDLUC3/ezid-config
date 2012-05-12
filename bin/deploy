@@ -1,0 +1,452 @@
+#! /usr/bin/env python
+
+# Interactive, semi-automated deployment tool for EZID.  May be run
+# from anywhere to deploy changes to, and restart/reload, all EZID
+# instances in sequence.  In addition, this tool can be used to
+# distribute the ezid.conf.shadow configuration file.
+#
+# To run this tool, the user must be able to: log in to the various
+# EZID host machines with or without a password; 'sudo su' to the n2t
+# role account without a password; and access the central Mercurial
+# repositories using a password.
+#
+# Usage:
+#
+#    deploy [-l logfile]
+#
+# This script operates by ssh-ing to the EZID host machines and
+# issuing commands as though a human were typing them.  As such, it is
+# fragile.  Use the -l option to record debugging output in case
+# anything goes wrong.  Caution: the output will contain any typed
+# passwords.
+#
+# This script requires pexpect <http://www.noah.org/wiki/pexpect>.  In
+# addition, it requires a custom version of pexpect's pxssh module
+# (named "mypxssh").
+#
+# Known problem: pxssh seems to leave zombie ssh processes scattered
+# around, even though we explicitly logout and close sessions.
+#
+# Greg Janee <gjanee@ucop.edu>
+# May 2012
+
+import ConfigParser
+import getpass
+import os
+import os.path
+import re
+import StringIO
+import sys
+import time
+
+import mypxssh
+
+ROLE_ACCOUNT = "n2t"
+ROLE_ACCOUNT_COMMAND = "/cdlcommon/products/bin/sudo su - " + ROLE_ACCOUNT
+ROLE_ACCOUNT_PROMPT = r">"
+APACHE_ROOT = "/n2t/apache"
+APACHE_ACCESS_LOG = APACHE_ROOT + "/logs/access_log"
+APACHE_RESTART_COMMAND = "/n2t/init.d/apache restart"
+EZID_ROOT = "/n2t/apache/ezid/SITE/PROJECT"
+HG_SERVER = "hg.cdlib.org"
+
+REPOSITORIES = [
+  # (selection code, name on HG_SERVER, local directory)
+  ("n", "n2t", APACHE_ROOT),
+  ("e", "ezid", EZID_ROOT),
+  ("i", "ezid-info-pages", EZID_ROOT + "/templates/info")]
+
+INSTANCES = [
+  # (abbreviation, name, hostname, EZID client code)
+  ("dev", "development", "n2t-dev.cdlib.org", "d"),
+  ("stg", "staging", "n2t-stage.cdlib.org", "s"),
+  ("wfl", "workflow", "n2t-wf.cdlib.org", "w"),
+  ("prd", "production", "n2t.net", "p")]
+
+_logfile = None
+_repository = None
+_sshUsername = None
+_sshPassword = None
+_hgUsername = None
+_hgPassword = None
+_shadowConfigFile = None
+_instance = None
+_ssh = None
+_adminPassword = None
+
+if len(sys.argv) not in [1, 3] or (len(sys.argv) == 3 and sys.argv[1] != "-l"):
+  sys.stderr.write("Usage: deploy [-l logfile]\n")
+  sys.exit(1)
+if len(sys.argv) == 3: _logfile = open(sys.argv[2], "w")
+
+def exit ():
+  global _ssh
+  if _ssh:
+    try:
+      _ssh.logout()
+      _ssh.close()
+    except:
+      pass
+    _ssh = None
+  sys.exit()
+
+def prPrefix ():
+  if _instance != None:
+    return "DEPLOY:%s|" % _instance[0]
+  else:
+    return "DEPLOY|"
+
+def pr (s=""):
+  if len(s) > 0:
+    print prPrefix() + " " + s
+  else:
+    print prPrefix()
+
+class Abandon (Exception):
+  pass
+
+def abandon ():
+  pr("Deployment on %s abandoned." % _instance[2])
+  raise Abandon()
+
+def ask (question, extraLines=[], hideAnswer=False, allowNoAnswer=False):
+  while True:
+    try:
+      pr()
+      pr(question)
+      for l in extraLines: pr("   " + l)
+      if hideAnswer:
+        answer = getpass.getpass(prPrefix() + " --> ").strip()
+      else:
+        answer = raw_input(prPrefix() + " --> ").strip()
+    except EOFError:
+      exit()
+    if len(answer) > 0 or allowNoAnswer: return answer
+    pr("No answer given.")
+
+def first (t):
+  return t[0]
+
+def second (t):
+  return t[1]
+
+def identity (t):
+  return t
+
+def askEnum (question, answers, selectionCodeFunc=first, fullAnswerFunc=second,
+  returnFunc=identity, extraLines=[]):
+  while True:
+    try:
+      pr()
+      pr(question)
+      for l in extraLines: pr("   " + l)
+      pr(", ".join("[%s] %s" %\
+        (selectionCodeFunc(a), fullAnswerFunc(a)) for a in answers))
+      answer = raw_input(prPrefix() + " --> ").strip()
+    except EOFError:
+      exit()
+    if len(answer) > 0:
+      if answer in map(selectionCodeFunc, answers):
+        return returnFunc(
+          [a for a in answers if selectionCodeFunc(a) == answer][0])
+      elif answer in map(fullAnswerFunc, answers):
+        return returnFunc(
+          [a for a in answers if fullAnswerFunc(a) == answer][0])
+      else:
+        al = filter(lambda a: fullAnswerFunc(a).startswith(answer), answers)
+        if len(al) == 0:
+          pr("Unrecognized answer.")
+        elif len(al) > 1:
+          pr("Ambiguous answer.")
+        else:
+          return returnFunc(al[0])
+    else:
+      pr("No answer given.")
+
+def askYesNo (question, extraLines=[]):
+  return askEnum(question, [("y", "yes"), ("n", "no")], returnFunc=second,
+    extraLines=extraLines) == "yes"
+
+def execute1 (command, expectCommandEcho=True, printableCommand=None):
+  if printableCommand == None: printableCommand = command
+  _ssh.sendline(command)
+  _ssh.prompt()
+  o = _ssh.before
+  if expectCommandEcho:
+    assert o.startswith(command + "\r\r\n"),\
+      "unexpected return from command '%s'" % printableCommand
+    o = o[len(command)+3:]
+  else:
+    assert o.startswith("\r\n"),\
+      "unexpected return from command '%s'" % printableCommand
+    o = o[2:]
+  return o.replace("\r\n", "\n")
+
+def execute (command, expectCommandEcho=True, checkStatus=True,
+  printableCommand=None):
+  if printableCommand == None: printableCommand = command
+  o = execute1(command, expectCommandEcho, printableCommand)
+  if checkStatus:
+    s = execute1("echo $?")
+    assert s == "0\n",\
+      "command '%s' returned nonzero exit status\n%s" % (printableCommand, o)
+  return o
+
+def attempt (func, description):
+  while True:
+    try:
+      func()
+    except Abandon:
+      raise
+    except Exception, e:
+      print "\n%s: %s\n" % (type(e).__name__, str(e).strip())
+      action = askEnum("Problem encountered %s.  Action?" % description,
+        [("i", "ignore"), ("r", "retry"), ("a", "abandon")], returnFunc=first)
+      if action == "i":
+        return
+      elif action == "r":
+        pass
+      elif action == "a":
+        abandon()
+      else:
+        assert False
+    else:
+      return
+
+def readShadowConfigFile ():
+  global _shadowConfigFile
+  while True:
+    d = ask("Directory containing shadow config file?",
+      extraLines=["(cwd=%s)" % os.getcwd()])
+    try:
+      f = open(os.path.join(d, "ezid.conf.shadow"))
+      _shadowConfigFile = f.read()
+      f.close()
+    except Exception, e:
+      pr("%s: %s" % (type(e).__name__, str(e).strip()))
+    else:
+      break
+  if not _shadowConfigFile.endswith("\n"):
+    pr("Shadow config file must end with newline; aborting.")
+    exit()
+  pr("OK")
+
+def checkRepositoryStatus ():
+  while True:
+    pr("Checking repository status...")
+    o = execute("hg status")
+    if o == "":
+      pr("OK")
+      return
+    print
+    print "> hg status"
+    print o
+    action = askEnum("Repository is not clean.  Action?",
+      [("c", "clean [discard uncommitted changes]"), ("i", "ignore"),
+      ("a", "abandon")], returnFunc=first)
+    if action == "c":
+      pr("Cleaning repository...")
+      o = execute("hg update -C -r .")
+      assert len(o.splitlines()) == 1 and re.match("\d+ files updated", o),\
+        "hg update failed:\n" + o
+      pr("OK")
+    elif action == "i":
+      return
+    elif action == "a":
+      abandon()
+    else:
+      assert False
+
+def pullChangesets ():
+  pr("Pulling changesets...")
+  command = "hg pull https://%s@%s/%s" % (_hgUsername, HG_SERVER,
+    _repository[1])
+  _ssh.sendline(command)
+  _ssh.expect("password: ")
+  o = execute(_hgPassword, False, False, command)
+  ol = o.splitlines()
+  assert len(ol) >= 3 and ol[0].startswith("pulling from") and\
+    ol[1].startswith("searching for") and\
+    (re.search("^no changes found", o, re.M) or\
+    re.search("^added \d+ changesets", o, re.M)), "hg pull failed:\n" + o
+  pr("OK")
+
+def verifyRepository ():
+  pr("Verifying repository...")
+  o = execute("hg verify")
+  assert o.startswith("checking") and "warning" not in o and\
+    "error" not in o, "hg verify failed:\n" + o
+  pr("OK")
+
+def updateRepository ():
+  pr("Updating repository...")
+  o = execute("hg identify -inbt")
+  print
+  print "> hg identify"
+  print o
+  o = execute("hg branches")
+  print "> hg branches"
+  print o
+  o = execute("hg heads")
+  print "> hg heads"
+  print o,
+  branch = askEnum("Update to which branch or changeset?",
+    [("p", "production"), ("d", "default"), ("o", "other"), ("a", "abandon")],
+    returnFunc=second,
+    extraLines=["Guideline: all instances but 'development' should",
+    "generally run the production branch.  The branch run",
+    "by the 'development' instance is variable."])
+  if branch == "abandon":
+    abandon()
+  elif branch == "other":
+    branch = ask("Enter any branch, tag, or changeset identifier:")
+  pr("Updating to %s..." % branch)
+  o = execute("hg update -r " + branch)
+  assert re.match("\d+ files updated", o), "hg update failed:\n" + o
+  pr("OK")
+
+def uploadShadowConfigFile ():
+  pr("Uploading new shadow config file...")
+  execute("cd " + EZID_ROOT)
+  _ssh.sendline("cat > settings/ezid.conf.shadow")
+  _ssh.send(_shadowConfigFile)
+  # sendeof doesn't work on Solaris for some reason, so we send ^D.
+  _ssh.sendcontrol('d')
+  _ssh.prompt()
+  pr("OK")
+  pr("Verifying the upload...")
+  o = execute("cat settings/ezid.conf.shadow")
+  assert o == _shadowConfigFile, "ezid.conf.shadow mismatch"
+  pr("OK")
+
+def getAdminPassword ():
+  global _adminPassword
+  pr("Locating EZID admin password...")
+  execute("cd " + EZID_ROOT)
+  o = execute("cat settings/ezid.conf.shadow")
+  cp = ConfigParser.ConfigParser()
+  cp.readfp(StringIO.StringIO(o))
+  if cp.has_option("ldap", "{%s}admin_password" % _instance[1]):
+    _adminPassword = cp.get("ldap", "{%s}admin_password" % _instance[1])
+  else:
+    _adminPassword = cp.get("ldap", "admin_password")
+  pr("OK")
+
+def reloadEzid ():
+  pr("Reloading EZID...")
+  execute("cd " + EZID_ROOT)
+  c = "tools/client %s admin:%s reload" % (_instance[3], _adminPassword)
+  pc = "tools/client %s admin:**** reload" % _instance[3]
+  o = execute(c, printableCommand=pc)
+  assert o.startswith("success"), "client reload failed:\n" + o
+  pr("OK")
+
+def restartApache ():
+  while True:
+    o = execute("tail " + APACHE_ACCESS_LOG)
+    print
+    print "> tail " + APACHE_ACCESS_LOG
+    print o
+    action = askEnum("Most recent server activity shown above.  Action?",
+      [("s", "restart"), ("t", "tail the log again"), ("a", "abandon")],
+      returnFunc=first)
+    if action == "s":
+      pr("Restarting Apache...")
+      execute(APACHE_RESTART_COMMAND)
+      pr("OK")
+      pr("Waiting a few seconds...")
+      time.sleep(3)
+      return
+    elif action == "t":
+      pass
+    elif action == "a":
+      abandon()
+    else:
+      assert False
+
+def reloadOrRestart ():
+  action = askEnum("Reload or restart?", [("l", "reload"), ("s", "restart"),
+    ("a", "abandon")], returnFunc=first,
+    extraLines=["Guideline: if only configuration files and templates",
+    "have changed, a reload is sufficient; otherwise, a",
+    "full restart is required.  If restart is selected, an",
+    "opportunity will be given to view system activity",
+    "first."])
+  if action == "l":
+    reloadEzid()
+  elif action == "s":
+    restartApache()
+  elif action == "a":
+    abandon()
+  else:
+    assert False
+
+def testServer ():
+  execute("cd " + EZID_ROOT)
+  for prefix in ["ark:/99999/fk4", "doi:10.5072/FK2"]:
+    pr("Testing the server...")
+    c = "tools/client %s admin:%s mint %s" % (_instance[3], _adminPassword,
+      prefix)
+    pc = "tools/client %s admin:**** mint %s" % (_instance[3], prefix)
+    o = execute(c, printableCommand=pc)
+    assert o.startswith("success"),\
+      "client mint %s failed:\n%s" % (prefix, o)
+    pr("OK")
+
+def deploy ():
+  global _ssh
+  try:
+    _ssh = mypxssh.pxssh()
+    _ssh.logfile = _logfile
+    pr("Logging in to %s... (may take awhile)" % _instance[2])
+    _ssh.login(_instance[2] + " " + ROLE_ACCOUNT_COMMAND, _sshUsername,
+      _sshPassword, original_prompt=ROLE_ACCOUNT_PROMPT)
+    pr("OK")
+    execute("cd " + _repository[2])
+    attempt(checkRepositoryStatus, "checking repository status")
+    attempt(pullChangesets, "pulling changesets")
+    attempt(verifyRepository, "verifying repository")
+    attempt(updateRepository, "updating repository")
+    if _shadowConfigFile:
+      attempt(uploadShadowConfigFile, "uploading new shadow config file")
+    attempt(getAdminPassword, "locating EZID admin password")
+    attempt(reloadOrRestart, "reloading or restarting EZID")
+    attempt(testServer, "testing the server")
+  except Abandon:
+    pass
+  except Exception, e:
+    print "\n%s: %s\n" % (type(e).__name__, str(e).strip())
+    pr("Deployment on %s abandoned due to exception." % _instance[2])
+  finally:
+    if _ssh:
+      try:
+        _ssh.logout()
+        _ssh.close()
+      except:
+        pass
+      _ssh = None
+
+_repository = askEnum("Which repository?", REPOSITORIES)
+if os.environ["USER"] == ROLE_ACCOUNT:
+  _sshUsername = ask("Login username?")
+  _sshPassword = ask("Login password? (will not be echoed)", hideAnswer=True)
+else:
+  _sshUsername = ask("Login username? (defaults to %s)" % os.environ["USER"],
+    allowNoAnswer=True)
+  if _sshUsername == "": _sshUsername = os.environ["USER"]
+  _sshPassword = ask("Login password? (only if required; will not be echoed)",
+    hideAnswer=True, allowNoAnswer=True)
+_hgUsername = ask("%s username? (defaults to %s)" % (HG_SERVER,
+  _sshUsername), allowNoAnswer=True)
+if _hgUsername == "": _hgUsername = _sshUsername
+_hgPassword = ask("%s password? (will not be echoed)" % HG_SERVER,
+  hideAnswer=True)
+if _repository[1] == "ezid" and\
+  askYesNo("Deploy new shadow config (ezid.conf.shadow) file?"):
+  readShadowConfigFile()
+
+for instance in INSTANCES:
+  _instance = None
+  if askYesNo("Deploy to %s (%s)?" % (instance[1], instance[2])):
+    _instance = instance
+    deploy()
