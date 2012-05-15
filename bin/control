@@ -1,0 +1,51 @@
+#! /bin/bash
+
+USAGE="Usage: $0 start|stop|restart|status"
+APACHECTL=/n2t/apache/bin/apachectl
+WGET=/cdlcommon/products/bin/wget
+SENTINEL=/n2t/init.d/VCS_MONITOR_DISABLED
+
+. /n2t/apache/WARTS/env.sh
+
+if [ $# -ne 1 ]; then
+    echo $USAGE
+    exit 1
+fi
+
+case $1 in
+    start)
+        pid=`ps -fU n2t | grep '[d]ownserver' | awk '{ print $2 }'`
+        if [ "$pid" != "" ]; then
+            echo
+            echo "!!! The downserver might be running; see PID $pid"
+            echo
+        fi
+        exec $APACHECTL start
+        ;;
+    stop)
+        exec $APACHECTL stop
+        ;;
+    restart)
+        exec $APACHECTL restart
+        ;;
+    status)
+        if [ -f $SENTINEL ]; then
+            # Fake out VCS.
+            echo "up (not really)"
+            exit 0
+        else
+            $WGET -q -T 15 -t 1 -O /dev/null http://$HOSTNAME/ezid/status
+            status=$?
+            if [ $status -eq 0 ]; then
+                echo up
+            else
+                echo down
+            fi
+            exit $status
+        fi
+        ;;
+    *)
+        echo $USAGE
+        exit 1
+        ;;
+esac

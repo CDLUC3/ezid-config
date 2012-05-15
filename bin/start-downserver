@@ -1,0 +1,15 @@
+#! /bin/bash
+
+# Starts the "EZID is down" replacement server.
+# Usage: start-downserver [message]
+
+HTTPD_CONF=/n2t/apache/WARTS/httpd.conf
+DOWNSERVER=/n2t/apache/ezid/SITE/PROJECT/tools/downserver
+LOG=/tmp/downserver.log
+
+hostport=`grep Listen $HTTPD_CONF | head -1 | awk '{ print $2 }'`
+$DOWNSERVER ${hostport%:*} ${hostport#*:} "$@" </dev/null >$LOG 2>&1 &
+echo "Server started in the background; logging to $LOG"
+echo "Current contents of log (should be empty):"
+sleep 1
+cat $LOG
