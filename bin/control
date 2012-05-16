@@ -31,7 +31,7 @@ case $1 in
     status)
         if [ -f $SENTINEL ]; then
             # Fake out VCS.
-            echo "up (not really)"
+            echo "up (by virtue of VCS fakeout)"
             exit 0
         else
             $WGET -q -T 15 -t 1 -O /dev/null http://$HOSTNAME/ezid/status
