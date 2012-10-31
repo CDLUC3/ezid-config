@@ -171,7 +171,13 @@ def execute1 (command, expectCommandEcho=True, printableCommand=None):
   if printableCommand == None: printableCommand = command
   _ssh.sendline(command)
   _ssh.prompt()
-  o = _ssh.before
+  # When a long command is issued, the echo of the command contains
+  # " \b" sequences at each place where the command wrapped in the
+  # terminal window.  It's not clear if this is specific to Solaris,
+  # or caused by the TERM setting, or...?  In any case, we don't
+  # expect these sequences in any output we care about, so we just
+  # remove them globally.
+  o = _ssh.before.replace(" \b", "")
   if expectCommandEcho:
     assert o.startswith(command + "\r\r\n"),\
       "unexpected return from command '%s'" % printableCommand
@@ -383,15 +389,20 @@ def reloadOrRestart ():
 
 def testServer ():
   execute("cd " + EZID_ROOT)
-  for prefix in ["ark:/99999/fk4", "doi:10.5072/FK2"]:
-    pr("Testing the server...")
-    c = "tools/client %s admin:%s mint %s" % (_instance[3], _adminPassword,
-      prefix)
-    pc = "tools/client %s admin:**** mint %s" % (_instance[3], prefix)
-    o = execute(c, printableCommand=pc)
-    assert o.startswith("success"),\
-      "client mint %s failed:\n%s" % (prefix, o)
-    pr("OK")
+  pr("Test: minting an ARK...")
+  prefix = "ark:/99999/fk4"
+  c = "tools/client %s admin:%%s mint %s" % (_instance[3], prefix)
+  o = execute(c % _adminPassword, printableCommand=(c % "****"))
+  assert o.startswith("success"), "client mint %s failed:\n%s" % (prefix, o)
+  pr("OK")
+  pr("Test: minting a DOI...")
+  prefix = "doi:10.5072/FK2"
+  c = ("tools/client %s admin:%%s mint %s datacite.title test " +\
+    "datacite.creator test datacite.publisher test datacite.publicationyear test") %\
+    (_instance[3], prefix)
+  o = execute(c % _adminPassword, printableCommand=(c % "****"))
+  assert o.startswith("success"), "client mint %s failed:\n%s" % (prefix, o)
+  pr("OK")
 
 def deploy ():
   global _ssh
