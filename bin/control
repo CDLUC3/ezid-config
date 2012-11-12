@@ -34,14 +34,34 @@ case $1 in
             echo "up (by virtue of VCS fakeout)"
             exit 0
         else
-            $WGET -q -T 15 -t 1 -O /dev/null http://$HOSTNAME/ezid/status
-            status=$?
-            if [ $status -eq 0 ]; then
-                echo up
+            pidcount=`ps -fU n2t | grep -c '[h]ttpd'`
+            if [ $pidcount -gt 0 ]; then
+                # The server appears to be running; check that it's
+                # responsive.
+                $WGET -q -T 10 -t 1 -O /dev/null http://$HOSTNAME/ezid/status
+                status=$?
+                if [ $status -eq 0 ]; then
+                    echo "up"
+                    exit 0
+                else
+                    # Not responsive.  Is it an EZID problem or a
+                    # network/DNS problem?  Try connecting to another
+                    # CDL production service.
+                    $WGET -q -T 10 -t 1 -O /dev/null http://www.cdlib.org/
+                    status=$?
+                    if [ $status -eq 0 ]; then
+                        # It appears to be EZID's problem.
+                        echo "down (unresponsive)"
+                        exit 1
+                    else
+                        echo "up (maybe; there appear to be network problems)"
+                        exit 0
+                    fi
+                fi
             else
-                echo down
+                echo "down (not running)"
+                exit 1
             fi
-            exit $status
         fi
         ;;
     *)
