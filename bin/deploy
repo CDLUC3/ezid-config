@@ -398,8 +398,8 @@ def testServer ():
   pr("Test: minting a DOI...")
   prefix = "doi:10.5072/FK2"
   c = ("tools/client %s admin:%%s mint %s datacite.title test " +\
-    "datacite.creator test datacite.publisher test datacite.publicationyear test") %\
-    (_instance[3], prefix)
+    "datacite.creator test datacite.publisher test " +\
+    "datacite.publicationyear test") % (_instance[3], prefix)
   o = execute(c % _adminPassword, printableCommand=(c % "****"))
   assert o.startswith("success"), "client mint %s failed:\n%s" % (prefix, o)
   pr("OK")
