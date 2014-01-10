@@ -1,11 +1,11 @@
 #! /bin/bash
 
 USAGE="Usage: $0 start|stop|restart|status"
-APACHECTL=/n2t/apache/bin/apachectl
-WGET=/cdlcommon/products/bin/wget
-SENTINEL=/n2t/init.d/VCS_MONITOR_DISABLED
+APACHECTL=/ezid/apache/bin/apachectl
+WGET=/opt/csw/bin/wget
+SENTINEL=/ezid/init.d/VCS_MONITOR_DISABLED
 
-. /n2t/apache/WARTS/env.sh
+. /ezid/apache/WARTS/env.sh
 
 if [ $# -ne 1 ]; then
     echo $USAGE
@@ -14,7 +14,7 @@ fi
 
 case $1 in
     start)
-        pid=`ps -fU n2t | grep '[d]ownserver' | awk '{ print $2 }'`
+        pid=`ps -fU ezid | grep '[d]ownserver' | awk '{ print $2 }'`
         if [ "$pid" != "" ]; then
             echo
             echo "!!! The downserver might be running; see PID $pid"
@@ -34,11 +34,11 @@ case $1 in
             echo "up (by virtue of VCS fakeout)"
             exit 0
         else
-            pidcount=`ps -fU n2t | grep -c '[h]ttpd'`
+            pidcount=`ps -fU ezid | grep -c '[h]ttpd'`
             if [ $pidcount -gt 0 ]; then
                 # The server appears to be running; check that it's
                 # responsive.
-                $WGET -q -T 60 -t 1 -O /dev/null http://$HOSTNAME/ezid/status
+                $WGET -q -T 60 -t 1 -O /dev/null http://$HOSTNAME/status
                 status=$?
                 if [ $status -eq 0 ]; then
                     echo "up"

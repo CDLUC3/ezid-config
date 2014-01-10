@@ -3,7 +3,7 @@
 # Enable/disable monitoring by VCS.
 
 USAGE="Usage: $0 enable|disable"
-SENTINEL=/n2t/init.d/VCS_MONITOR_DISABLED
+SENTINEL=/ezid/init.d/VCS_MONITOR_DISABLED
 
 if [ $# -ne 1 ]; then
     echo $USAGE

@@ -3,8 +3,8 @@
 # Starts the "EZID is down" replacement server.
 # Usage: start-downserver [message]
 
-HTTPD_CONF=/n2t/apache/WARTS/httpd.conf
-DOWNSERVER=/n2t/apache/ezid/SITE/PROJECT/tools/downserver
+HTTPD_CONF=/ezid/apache/WARTS/httpd.conf
+DOWNSERVER=/ezid/apache/ezid/SITE/PROJECT/tools/downserver
 LOG=/tmp/downserver.log
 
 hostport=`grep Listen $HTTPD_CONF | head -1 | awk '{ print $2 }'`

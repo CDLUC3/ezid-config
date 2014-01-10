@@ -41,14 +41,14 @@ ARGV="$@"
 # --------------------                              --------------------
 # 
 # Local "warts"
-. /n2t/apache/WARTS/env.sh
+. /ezid/apache/WARTS/env.sh
 #
 # the path to your httpd binary, including options if necessary
-HTTPD='/n2t/sw/httpd/bin/httpd -f /n2t/apache/conf/httpd.conf'
+HTTPD='/ezid/sw/httpd/bin/httpd -f /ezid/apache/conf/httpd.conf'
 #
 # pick up any necessary environment variables
-if test -f /n2t/sw/httpd/bin/envvars; then
-  . /n2t/sw/httpd/bin/envvars
+if test -f /ezid/sw/httpd/bin/envvars; then
+  . /ezid/sw/httpd/bin/envvars
 fi
 #
 # a command that outputs a formatted text version of the HTML at the
