@@ -6,7 +6,7 @@
 # distribute the ezid.conf.shadow configuration file.
 #
 # To run this tool, the user must be able to: log in to the various
-# EZID host machines with or without a password; 'sudo su' to the n2t
+# EZID host machines with or without a password; 'sudo su' to the ezid
 # role account without a password; and access the central Mercurial
 # repositories using a password.
 #
@@ -41,27 +41,27 @@ import time
 
 import mypxssh
 
-ROLE_ACCOUNT = "n2t"
+ROLE_ACCOUNT = "ezid"
 ROLE_ACCOUNT_COMMAND = "/cdlcommon/products/bin/sudo su - " + ROLE_ACCOUNT
-ROLE_ACCOUNT_PROMPT = r">"
-APACHE_ROOT = "/n2t/apache"
+ROLE_ACCOUNT_PROMPT = r"%"
+APACHE_ROOT = "/ezid/apache"
 APACHE_ACCESS_LOG = APACHE_ROOT + "/logs/access_log"
-APACHE_RESTART_COMMAND = "/n2t/init.d/apache restart"
-EZID_ROOT = "/n2t/apache/ezid/SITE/PROJECT"
+APACHE_RESTART_COMMAND = "/ezid/init.d/apache restart"
+EZID_ROOT = "/ezid/apache/ezid/SITE/PROJECT"
 HG_SERVER = "hg.cdlib.org"
 
 REPOSITORIES = [
   # (selection code, name on HG_SERVER, local directory)
-  ("n", "n2t", APACHE_ROOT),
+  ("c", "ezid-config", APACHE_ROOT),
   ("e", "ezid", EZID_ROOT),
   ("i", "ezid-info-pages", EZID_ROOT + "/templates/info")]
 
 INSTANCES = [
   # (abbreviation, name, hostname, EZID client code)
-  ("dev", "development", "n2t-dev.cdlib.org", "d"),
-  ("stg", "staging", "n2t-stage.cdlib.org", "s"),
-  ("wfl", "workflow", "n2t-wf.cdlib.org", "w"),
-  ("prd", "production", "n2t.net", "p")]
+  ("dev", "development", "ezid-dev.cdlib.org", "d"),
+  ("stg", "staging", "ezid-stg.cdlib.org", "s"),
+  ("wfl", "workflow", "ezid-wf.cdlib.org", "w"),
+  ("prd", "production", "ezid.cdlib.org", "p")]
 
 _logfile = None
 _repository = None
@@ -172,16 +172,16 @@ def execute1 (command, expectCommandEcho=True, printableCommand=None):
   _ssh.sendline(command)
   _ssh.prompt()
   # When a long command is issued, the echo of the command contains
-  # " \b" sequences at each place where the command wrapped in the
+  # " \r" sequences at each place where the command wrapped in the
   # terminal window.  It's not clear if this is specific to Solaris,
   # or caused by the TERM setting, or...?  In any case, we don't
   # expect these sequences in any output we care about, so we just
   # remove them globally.
-  o = _ssh.before.replace(" \b", "")
+  o = _ssh.before.replace(" \r", "")
   if expectCommandEcho:
-    assert o.startswith(command + "\r\r\n"),\
+    assert o.startswith(command + "\r\n"),\
       "unexpected return from command '%s'" % printableCommand
-    o = o[len(command)+3:]
+    o = o[len(command)+2:]
   else:
     assert o.startswith("\r\n"),\
       "unexpected return from command '%s'" % printableCommand
@@ -354,9 +354,9 @@ def restartApache ():
     print "> tail " + APACHE_ACCESS_LOG
     print o
     action = askEnum("Most recent server activity shown above.  Action?",
-      [("s", "restart"), ("t", "tail the log again"), ("a", "abandon")],
+      [("r", "restart"), ("t", "tail the log again"), ("a", "abandon")],
       returnFunc=first)
-    if action == "s":
+    if action == "r":
       pr("Restarting Apache...")
       execute(APACHE_RESTART_COMMAND)
       pr("OK")

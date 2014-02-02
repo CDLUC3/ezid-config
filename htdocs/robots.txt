@@ -1,4 +1,3 @@
 User-agent: *
-Disallow: /ezid/doc/apidoc.2.html
-Disallow: /ezid/doc/apidoc.1.html
-Disallow: /d/n2t_vision.html
+Disallow: /doc/apidoc.1.html
+Disallow: /doc/apidoc.2.html
