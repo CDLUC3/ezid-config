@@ -74,6 +74,11 @@ _instance = None
 _ssh = None
 _adminPassword = None
 
+if "USER" in os.environ:
+  _loginUsername = os.environ["USER"]
+else:
+  _loginUsername = os.environ["LOGNAME"]
+
 if len(sys.argv) not in [1, 3] or (len(sys.argv) == 3 and sys.argv[1] != "-l"):
   sys.stderr.write("Usage: deploy [-l logfile]\n")
   sys.exit(1)
@@ -438,13 +443,13 @@ def deploy ():
       _ssh = None
 
 _repository = askEnum("Which repository?", REPOSITORIES)
-if os.environ["USER"] == ROLE_ACCOUNT:
+if _loginUsername == ROLE_ACCOUNT:
   _sshUsername = ask("Login username?")
   _sshPassword = ask("Login password? (will not be echoed)", hideAnswer=True)
 else:
-  _sshUsername = ask("Login username? (defaults to %s)" % os.environ["USER"],
+  _sshUsername = ask("Login username? (defaults to %s)" % _loginUsername,
     allowNoAnswer=True)
-  if _sshUsername == "": _sshUsername = os.environ["USER"]
+  if _sshUsername == "": _sshUsername = _loginUsername
   _sshPassword = ask("Login password? (only if required; will not be echoed)",
     hideAnswer=True, allowNoAnswer=True)
 _hgUsername = ask("%s username? (defaults to %s)" % (HG_SERVER,
