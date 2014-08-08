@@ -12,13 +12,61 @@
 #
 # Usage:
 #
-#    deploy [-l logfile]
+#    deploy [-a answerbank] [-l logfile]
 #
 # This script operates by ssh-ing to the EZID host machines and
 # issuing commands as though a human were typing them.  As such, it is
 # fragile.  Use the -l option to record debugging output in case
 # anything goes wrong.  Caution: the output will contain any typed
 # passwords.
+#
+# The -a option can be used to specify a file containing answers; any
+# answers not in the file will be asked for interactively as normal.
+# The file should be a Python configuration file in which the DEFAULT
+# section gives answers to instance-independent questions and default
+# answers that apply to all instances, and in which named sections
+# give answers for specific instances.  Questions are identified by
+# number.
+#
+# Instance-independent questions:
+#
+#     0 Problem encountered.  Action?
+#     1 Which repository?
+#     2 Login username?
+#     3 Login password?
+#     4 <repository> username?
+#     5 <repository> password?
+#     6 Deploy new shadow config file?
+#     7 Directory containing shadow config file?
+#     8 Deploy to <instance>?
+#
+# Instance-specific questions:
+#
+#     9 Repository is not clean.  Action?
+#    10 Update to which branch or changeset?
+#    11 Enter any branch, tag, or changeset identifier.
+#    12 Reload or restart?
+#    13 Most recent server activity shown.  Action?
+#
+# The sample file below reloads all instances, deploying the
+# production branch to all instances except for the development
+# instance, which receives the default branch.
+#
+#    [DEFAULT]
+#    1: ezid
+#    2: gjanee
+#    3:
+#    4: gjanee
+#    6: no
+#    8: yes
+#    10: production
+#    12: reload
+#
+#    [development]
+#    10: default
+#
+# Caution: it is possible for pre-loaded answers to cause an infinite
+# loop.
 #
 # This script requires pexpect <http://www.noah.org/wiki/pexpect>.  In
 # addition, it requires a custom version of pexpect's pxssh module
@@ -28,10 +76,11 @@
 # around, even though we explicitly logout and close sessions.
 #
 # Greg Janee <gjanee@ucop.edu>
-# May 2012
+# May 2012; updated August 2014
 
 import ConfigParser
 import getpass
+import optparse
 import os
 import os.path
 import re
@@ -63,6 +112,7 @@ INSTANCES = [
   ("wfl", "workflow", "ezid-wf.cdlib.org", "w"),
   ("prd", "production", "ezid.cdlib.org", "p")]
 
+_answerBank = None
 _logfile = None
 _repository = None
 _sshUsername = None
@@ -78,11 +128,6 @@ if "USER" in os.environ:
   _loginUsername = os.environ["USER"]
 else:
   _loginUsername = os.environ["LOGNAME"]
-
-if len(sys.argv) not in [1, 3] or (len(sys.argv) == 3 and sys.argv[1] != "-l"):
-  sys.stderr.write("Usage: deploy [-l logfile]\n")
-  sys.exit(1)
-if len(sys.argv) == 3: _logfile = open(sys.argv[2], "w")
 
 def exit ():
   global _ssh
@@ -114,16 +159,36 @@ def abandon ():
   pr("Deployment on %s abandoned." % _instance[2])
   raise Abandon()
 
-def ask (question, extraLines=[], hideAnswer=False, allowNoAnswer=False):
+def bankedAnswer (qNum):
+  if _answerBank == None: return None
+  q = str(qNum)
+  if _instance != None:
+    if _answerBank.has_option(_instance[1], q):
+      return _answerBank.get(_instance[1], q)
+  if _answerBank.has_option("DEFAULT", q):
+    return _answerBank.get("DEFAULT", q)
+  return None
+
+def ask (qNum, question, extraLines=[], hideAnswer=False, allowNoAnswer=False):
+  bankedAnswerAttempt = False
   while True:
     try:
       pr()
       pr(question)
       for l in extraLines: pr("   " + l)
-      if hideAnswer:
-        answer = getpass.getpass(prPrefix() + " --> ").strip()
+      if bankedAnswer(qNum) != None:
+        assert not bankedAnswerAttempt, "answer bank results in infinite loop"
+        bankedAnswerAttempt = True
+        answer = bankedAnswer(qNum).strip()
+        if hideAnswer:
+          pr("-->")
+        else:
+          pr("--> " + answer)
       else:
-        answer = raw_input(prPrefix() + " --> ").strip()
+        if hideAnswer:
+          answer = getpass.getpass(prPrefix() + " --> ").strip()
+        else:
+          answer = raw_input(prPrefix() + " --> ").strip()
     except EOFError:
       exit()
     if len(answer) > 0 or allowNoAnswer: return answer
@@ -138,8 +203,9 @@ def second (t):
 def identity (t):
   return t
 
-def askEnum (question, answers, selectionCodeFunc=first, fullAnswerFunc=second,
-  returnFunc=identity, extraLines=[]):
+def askEnum (qNum, question, answers, selectionCodeFunc=first,
+  fullAnswerFunc=second, returnFunc=identity, extraLines=[]):
+  bankedAnswerAttempt = False
   while True:
     try:
       pr()
@@ -147,7 +213,13 @@ def askEnum (question, answers, selectionCodeFunc=first, fullAnswerFunc=second,
       for l in extraLines: pr("   " + l)
       pr(", ".join("[%s] %s" %\
         (selectionCodeFunc(a), fullAnswerFunc(a)) for a in answers))
-      answer = raw_input(prPrefix() + " --> ").strip()
+      if bankedAnswer(qNum) != None:
+        assert not bankedAnswerAttempt, "answer bank results in infinite loop"
+        bankedAnswerAttempt = True
+        answer = bankedAnswer(qNum).strip()
+        pr("--> " + answer)
+      else:
+        answer = raw_input(prPrefix() + " --> ").strip()
     except EOFError:
       exit()
     if len(answer) > 0:
@@ -168,9 +240,9 @@ def askEnum (question, answers, selectionCodeFunc=first, fullAnswerFunc=second,
     else:
       pr("No answer given.")
 
-def askYesNo (question, extraLines=[]):
-  return askEnum(question, [("y", "yes"), ("n", "no")], returnFunc=second,
-    extraLines=extraLines) == "yes"
+def askYesNo (qNum, question, extraLines=[]):
+  return askEnum(qNum, question, [("y", "yes"), ("n", "no")],
+    returnFunc=second, extraLines=extraLines) == "yes"
 
 def execute1 (command, expectCommandEcho=True, printableCommand=None):
   if printableCommand == None: printableCommand = command
@@ -211,7 +283,7 @@ def attempt (func, description):
       raise
     except Exception, e:
       print "\n%s: %s\n" % (type(e).__name__, str(e).strip())
-      action = askEnum("Problem encountered %s.  Action?" % description,
+      action = askEnum(0, "Problem encountered %s.  Action?" % description,
         [("i", "ignore"), ("r", "retry"), ("a", "abandon")], returnFunc=first)
       if action == "i":
         return
@@ -227,7 +299,7 @@ def attempt (func, description):
 def readShadowConfigFile ():
   global _shadowConfigFile
   while True:
-    d = ask("Directory containing shadow config file?",
+    d = ask(7, "Directory containing shadow config file?",
       extraLines=["(cwd=%s)" % os.getcwd()])
     try:
       f = open(os.path.join(d, "ezid.conf.shadow"))
@@ -252,7 +324,7 @@ def checkRepositoryStatus ():
     print
     print "> hg status"
     print o
-    action = askEnum("Repository is not clean.  Action?",
+    action = askEnum(9, "Repository is not clean.  Action?",
       [("c", "clean [discard uncommitted changes]"), ("i", "ignore"),
       ("a", "abandon")], returnFunc=first)
     if action == "c":
@@ -301,7 +373,7 @@ def updateRepository ():
   o = execute("hg heads")
   print "> hg heads"
   print o,
-  branch = askEnum("Update to which branch or changeset?",
+  branch = askEnum(10, "Update to which branch or changeset?",
     [("p", "production"), ("d", "default"), ("o", "other"), ("a", "abandon")],
     returnFunc=second,
     extraLines=["Guideline: all instances but 'development' should",
@@ -310,7 +382,7 @@ def updateRepository ():
   if branch == "abandon":
     abandon()
   elif branch == "other":
-    branch = ask("Enter any branch, tag, or changeset identifier:")
+    branch = ask(11, "Enter any branch, tag, or changeset identifier:")
   pr("Updating to %s..." % branch)
   o = execute("hg update -r " + branch)
   assert re.match("\d+ files updated", o), "hg update failed:\n" + o
@@ -358,7 +430,7 @@ def restartApache ():
     print
     print "> tail " + APACHE_ACCESS_LOG
     print o
-    action = askEnum("Most recent server activity shown above.  Action?",
+    action = askEnum(13, "Most recent server activity shown above.  Action?",
       [("r", "restart"), ("t", "tail the log again"), ("a", "abandon")],
       returnFunc=first)
     if action == "r":
@@ -376,8 +448,8 @@ def restartApache ():
       assert False
 
 def reloadOrRestart ():
-  action = askEnum("Reload or restart?", [("l", "reload"), ("s", "restart"),
-    ("a", "abandon")], returnFunc=first,
+  action = askEnum(12, "Reload or restart?", [("l", "reload"),
+    ("s", "restart"), ("a", "abandon")], returnFunc=first,
     extraLines=["Guideline: if only configuration files and templates",
     "have changed, a reload is sufficient; otherwise, a",
     "full restart is required.  If restart is selected, an",
@@ -442,27 +514,52 @@ def deploy ():
         pass
       _ssh = None
 
-_repository = askEnum("Which repository?", REPOSITORIES)
+# Command line arguments.
+
+p = optparse.OptionParser(usage="%prog [options]")
+p.add_option("-a", action="store", type="string", dest="answerBank",
+  default=None, metavar="FILE", help="answer file")
+p.add_option("-l", action="store", type="string", dest="logfile",
+  default=None, metavar="FILE", help="log file")
+options, args = p.parse_args()
+if len(args) != 0: p.error("wrong number of arguments")
+
+if options.answerBank:
+  _answerBank = ConfigParser.SafeConfigParser()
+  f = open(options.answerBank)
+  _answerBank.readfp(f)
+  f.close()
+
+if options.logfile:
+  _logfile = open(options.logfile, "w")
+
+# Initial questions.
+
+_repository = askEnum(1, "Which repository?", REPOSITORIES)
 if _loginUsername == ROLE_ACCOUNT:
-  _sshUsername = ask("Login username?")
-  _sshPassword = ask("Login password? (will not be echoed)", hideAnswer=True)
+  _sshUsername = ask(2, "Login username?")
+  _sshPassword = ask(3, "Login password? (will not be echoed)",
+    hideAnswer=True)
 else:
-  _sshUsername = ask("Login username? (defaults to %s)" % _loginUsername,
+  _sshUsername = ask(2, "Login username? (defaults to %s)" % _loginUsername,
     allowNoAnswer=True)
   if _sshUsername == "": _sshUsername = _loginUsername
-  _sshPassword = ask("Login password? (only if required; will not be echoed)",
+  _sshPassword = ask(3,
+    "Login password? (only if required; will not be echoed)",
     hideAnswer=True, allowNoAnswer=True)
-_hgUsername = ask("%s username? (defaults to %s)" % (HG_SERVER,
+_hgUsername = ask(4, "%s username? (defaults to %s)" % (HG_SERVER,
   _sshUsername), allowNoAnswer=True)
 if _hgUsername == "": _hgUsername = _sshUsername
-_hgPassword = ask("%s password? (will not be echoed)" % HG_SERVER,
+_hgPassword = ask(5, "%s password? (will not be echoed)" % HG_SERVER,
   hideAnswer=True)
 if _repository[1] == "ezid" and\
-  askYesNo("Deploy new shadow config (ezid.conf.shadow) file?"):
+  askYesNo(6, "Deploy new shadow config (ezid.conf.shadow) file?"):
   readShadowConfigFile()
+
+# Main processing.
 
 for instance in INSTANCES:
   _instance = None
-  if askYesNo("Deploy to %s (%s)?" % (instance[1], instance[2])):
+  if askYesNo(8, "Deploy to %s (%s)?" % (instance[1], instance[2])):
     _instance = instance
     deploy()
