@@ -1,15 +1,32 @@
 #! /bin/bash
 
 # Starts the "EZID is down" replacement server.
+# N.B.: This actually starts two processes.
 # Usage: start-downserver [message]
 
-HTTPD_CONF=/ezid/apache/WARTS/httpd.conf
+WART_DIR=/ezid/apache/WARTS
+HTTPD_CONF=$WART_DIR/httpd.conf
 DOWNSERVER=/ezid/apache/ezid/SITE/PROJECT/tools/downserver
-LOG=/tmp/downserver.log
+HTTP_LOG=/tmp/downserver.http.log
+HTTPS_LOG=/tmp/downserver.https.log
 
+# HTTP server
 hostport=`grep Listen $HTTPD_CONF | head -1 | awk '{ print $2 }'`
-$DOWNSERVER ${hostport%:*} ${hostport#*:} "$@" </dev/null >$LOG 2>&1 &
-echo "Server started in the background; logging to $LOG"
+$DOWNSERVER ${hostport%:*} ${hostport#*:} "$@" </dev/null >$HTTP_LOG 2>&1 &
+echo "HTTP server started in the background; logging to $HTTP_LOG"
 echo "Current contents of log (should be empty):"
 sleep 1
-cat $LOG
+cat $HTTP_LOG
+
+echo
+
+# HTTPS server
+hostport=`grep Listen $HTTPD_CONF | tail -1 | awk '{ print $2 }'`
+name=`grep ServerName $HTTPD_CONF | awk '{ print $2 }'`
+name=${name%:*}
+$DOWNSERVER -ssl $WART_DIR/$name.key $WART_DIR/$name.crt ${hostport%:*} \
+  ${hostport#*:} "$@" </dev/null >$HTTPS_LOG 2>&1 &
+echo "HTTPS server started in the background; logging to $HTTPS_LOG"
+echo "Current contents of log (should be empty):"
+sleep 1
+cat $HTTPS_LOG

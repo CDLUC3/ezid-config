@@ -14,7 +14,7 @@ fi
 
 case $1 in
     start)
-        pid=`ps -fU ezid | grep '[d]ownserver' | awk '{ print $2 }'`
+        pid=`ps -fU ezid | grep '[d]ownserver' | head -1 | awk '{ print $2 }'`
         if [ "$pid" != "" ]; then
             echo
             echo "!!! The downserver might be running; see PID $pid"
