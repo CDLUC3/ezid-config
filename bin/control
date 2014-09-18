@@ -1,9 +1,12 @@
 #! /bin/bash
 
-USAGE="Usage: $0 start|stop|restart|status"
+USAGE="Usage: $0 start|stop|kill|restart|status"
 APACHECTL=/ezid/apache/bin/apachectl
 WGET=/opt/csw/bin/wget
 SENTINEL=/ezid/init.d/VCS_MONITOR_DISABLED
+PR=/ezid/apache/ezid/SITE/PROJECT
+SHADOWFILE=$PR/settings/ezid.conf.shadow
+CLIENT=$PR/tools/client
 
 . /ezid/apache/WARTS/env.sh
 
@@ -11,6 +14,23 @@ if [ $# -ne 1 ]; then
     echo $USAGE
     exit 1
 fi
+
+function pauseEzid {
+    level=${DJANGO_SETTINGS_MODULE#*.}
+    # The parsing below is far from foolproof, but we do at least look
+    # for a deployment-level-specific value before a generic value.
+    password=`grep '^{'$level'}admin_password: [^ ]' $SHADOWFILE`
+    if [ "$password" == "" ]; then
+        password=`grep '^admin_password: [^ ]' $SHADOWFILE`
+        if [ "$password" == "" ]; then
+            echo "ERROR: unable to locate admin password" 1>&2
+            exit 1
+        fi
+    fi
+    password=${password#*: }
+    echo "Waiting for the system to become quiescent..."
+    $CLIENT ${level:0:1} "admin:$password" pause idlewait
+}
 
 case $1 in
     start)
@@ -23,9 +43,16 @@ case $1 in
         exec $APACHECTL start
         ;;
     stop)
+        pauseEzid
+        echo "Stopping the server..."
+        exec $APACHECTL stop
+        ;;
+    kill)
         exec $APACHECTL stop
         ;;
     restart)
+        pauseEzid
+        echo "Restarting the server..."
         exec $APACHECTL restart
         ;;
     status)
