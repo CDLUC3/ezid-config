@@ -30,6 +30,10 @@ function pauseEzid {
     password=${password#*: }
     echo "Waiting for the system to become quiescent..."
     $CLIENT ${level:0:1} "admin:$password" pause idlewait
+    if [ $? -ne 0 ]; then
+        echo "ERROR: server 'pause idlewait' command failed" 1>&2
+        exit 1
+    fi
 }
 
 case $1 in
