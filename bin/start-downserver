@@ -2,13 +2,19 @@
 
 # Starts the "EZID is down" replacement server.
 # N.B.: This actually starts two processes.
-# Usage: start-downserver [message]
+# Usage: start-downserver downtime [message]
+# 'downtime' is the anticipated down time in seconds.
 
 WART_DIR=/ezid/apache/WARTS
 HTTPD_CONF=$WART_DIR/httpd.conf
 DOWNSERVER=/ezid/apache/ezid/SITE/PROJECT/tools/downserver
 HTTP_LOG=/tmp/downserver.http.log
 HTTPS_LOG=/tmp/downserver.https.log
+
+if [ $# -lt 1 -o $# -gt 2 ]; then
+  echo "Usage: start-downserver downtime [message]" 1>&2
+  exit 1
+fi
 
 # HTTP server
 hostport=`grep Listen $HTTPD_CONF | head -1 | awk '{ print $2 }'`
