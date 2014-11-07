@@ -1,6 +1,6 @@
 #! /bin/bash
 
-USAGE="Usage: $0 start|stop|kill|restart|status"
+USAGE="Usage: $0 start|stop|kill|restart|force-restart|status"
 APACHECTL=/ezid/apache/bin/apachectl
 WGET=/opt/csw/bin/wget
 SENTINEL=/ezid/init.d/VCS_MONITOR_DISABLED
@@ -52,10 +52,15 @@ case $1 in
         exec $APACHECTL stop
         ;;
     kill)
+        echo "Stopping the server..."
         exec $APACHECTL stop
         ;;
     restart)
         pauseEzid
+        echo "Restarting the server..."
+        exec $APACHECTL restart
+        ;;
+    force-restart)
         echo "Restarting the server..."
         exec $APACHECTL restart
         ;;
