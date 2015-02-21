@@ -45,7 +45,7 @@
 #     9 Repository is not clean.  Action?
 #    10 Update to which branch or changeset?
 #    11 Enter any branch, tag, or changeset identifier.
-#    12 Reload or restart?
+#    12 Reload EZID, reload mod_wsgi, or restart?
 #    13 Most recent server activity shown.  Action?
 #
 # The sample file below reloads all instances, deploying the
@@ -60,7 +60,7 @@
 #    6: no
 #    8: yes
 #    10: production
-#    12: reload
+#    12: reload EZID
 #
 #    [development]
 #    10: default
@@ -424,6 +424,13 @@ def reloadEzid ():
   assert o.startswith("success"), "client reload failed:\n" + o
   pr("OK")
 
+def reloadModwsgi ():
+  pr("Triggering a mod_wsgi reload (EZID daemon restart)...")
+  execute("touch " + os.path.join(EZID_ROOT, "apache", "django.wsgi"))
+  pr("OK")
+  pr("Waiting a few seconds...")
+  time.sleep(3)
+
 def restartApache ():
   while True:
     o = execute("tail " + APACHE_ACCESS_LOG)
@@ -448,15 +455,23 @@ def restartApache ():
       assert False
 
 def reloadOrRestart ():
-  action = askEnum(12, "Reload or restart?", [("l", "reload"),
-    ("s", "restart"), ("a", "abandon")], returnFunc=first,
-    extraLines=["Guideline: if only configuration files and templates",
-    "have changed, a reload is sufficient; otherwise, a",
-    "full restart is required.  If restart is selected, an",
-    "opportunity will be given to view system activity",
-    "first."])
+  action = askEnum(12, "Reload EZID, reload mod_wsgi, or restart?",
+    [("l", "reload EZID"),
+    ("m", "reload mod_wsgi"), ("s", "restart"), ("a", "abandon")],
+    returnFunc=first,
+    extraLines=["Guideline: If only configuration files and templates have",
+    "changed, a 'reload EZID' is sufficient; no current",
+    "operations or incoming requests will be affected.  If code",
+    "has changed, a 'reload mod_wsgi' must be performed, which",
+    "restarts the EZID daemon process; it attempts to wait until",
+    "all current operations have finished and holds on to",
+    "incoming requests, but may time out.  A 'restart' restarts",
+    "Apache entirely.  If 'restart' is selected, an opportunity",
+    "will be given to view system activity first."])
   if action == "l":
     reloadEzid()
+  elif action == "m":
+    reloadModwsgi()
   elif action == "s":
     restartApache()
   elif action == "a":
