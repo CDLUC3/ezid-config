@@ -2,8 +2,7 @@
 
 USAGE="Usage: $0 start|stop|kill|restart|force-restart|status"
 APACHECTL=/ezid/apache/bin/apachectl
-WGET=/opt/csw/bin/wget
-SENTINEL=/ezid/init.d/VCS_MONITOR_DISABLED
+WGET=/usr/bin/wget
 PR=/ezid/apache/ezid/SITE/PROJECT
 SHADOWFILE=$PR/settings/ezid.conf.shadow
 CLIENT=$PR/tools/client
@@ -65,39 +64,33 @@ case $1 in
         exec $APACHECTL restart
         ;;
     status)
-        if [ -f $SENTINEL ]; then
-            # Fake out VCS.
-            echo "up (by virtue of VCS fakeout)"
-            exit 0
-        else
-            pidcount=`ps -fU ezid | grep -c '[h]ttpd'`
-            if [ $pidcount -gt 0 ]; then
-                # The server appears to be running; check that it's
-                # responsive.
-                $WGET -q -T 60 -t 1 -O /dev/null http://$HOSTNAME/status
+        pidcount=`ps -fU ezid | grep -c '[h]ttpd'`
+        if [ $pidcount -gt 0 ]; then
+            # The server appears to be running; check that it's
+            # responsive.
+            $WGET -q -T 60 -t 1 -O /dev/null http://$HOSTNAME/status
+            status=$?
+            if [ $status -eq 0 ]; then
+                echo "up"
+                exit 0
+            else
+                # Not responsive.  Is it an EZID problem or a
+                # network/DNS problem?  Try connecting to another
+                # CDL production service.
+                $WGET -q -T 10 -t 1 -O /dev/null http://n2t.net/
                 status=$?
                 if [ $status -eq 0 ]; then
-                    echo "up"
-                    exit 0
+                    # It appears to be EZID's problem.
+                    echo "down (unresponsive)"
+                    exit 1
                 else
-                    # Not responsive.  Is it an EZID problem or a
-                    # network/DNS problem?  Try connecting to another
-                    # CDL production service.
-                    $WGET -q -T 10 -t 1 -O /dev/null http://www.cdlib.org/
-                    status=$?
-                    if [ $status -eq 0 ]; then
-                        # It appears to be EZID's problem.
-                        echo "down (unresponsive)"
-                        exit 1
-                    else
-                        echo "up (maybe; there appear to be network problems)"
-                        exit 0
-                    fi
+                    echo "up (maybe; there appear to be network problems)"
+                    exit 0
                 fi
-            else
-                echo "down (not running)"
-                exit 1
             fi
+        else
+            echo "down (not running)"
+            exit 1
         fi
         ;;
     *)
