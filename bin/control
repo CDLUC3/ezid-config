@@ -1,6 +1,6 @@
 #! /bin/bash
 
-USAGE="Usage: $0 start|stop|kill|restart|force-restart|status"
+USAGE="Usage: $0 start|stop|force-stop|restart|force-restart|status"
 APACHECTL=/ezid/apache/bin/apachectl
 WGET=/usr/bin/wget
 PR=/ezid/apache/ezid/SITE/PROJECT
@@ -56,18 +56,14 @@ case $1 in
         ;;
     stop)
         pauseEzid
-        echo "Stopping the server..."
-        exec $APACHECTL stop
-        ;;
-    kill)
+        ;&
+    force-stop)
         echo "Stopping the server..."
         exec $APACHECTL stop
         ;;
     restart)
         pauseEzid
-        echo "Restarting the server..."
-        exec $APACHECTL restart
-        ;;
+        ;&
     force-restart)
         echo "Restarting the server..."
         exec $APACHECTL restart
