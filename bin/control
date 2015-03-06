@@ -43,7 +43,16 @@ case $1 in
             echo "!!! The downserver might be running; see PID $pid"
             echo
         fi
-        exec $APACHECTL start
+        echo "Starting the server..."
+        $APACHECTL start
+        status=$?
+        if [ $status -ne 0 ]; then exit $status; fi
+        # The various components of EZID are loaded on demand.  The
+        # following request does not cause everything to be loaded and
+        # tested, but it does confirm that Apache, mod_wsgi, Django,
+        # and EZID are basically functioning.
+        echo "Exercising the server..."
+        exec $WGET -q -T 60 -t 1 -O /dev/null http://$HOSTNAME/status
         ;;
     stop)
         pauseEzid
