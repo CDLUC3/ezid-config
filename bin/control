@@ -15,6 +15,11 @@ if [ $# -ne 1 ]; then
 fi
 
 function pauseEzid {
+    pidcount=`ps -fU ezid | grep -c '[h]ttpd'`
+    if [ $pidcount -eq 0 ]; then
+       echo "Pausing the server... (doesn't appear to be running)"
+       return
+    fi
     level=${DJANGO_SETTINGS_MODULE#*.}
     # The parsing below is far from foolproof, but we do at least look
     # for a deployment-level-specific value before a generic value.
@@ -27,7 +32,7 @@ function pauseEzid {
         fi
     fi
     password=${password#*: }
-    echo "Waiting for the system to become quiescent..."
+    echo "Pausing the server..."
     $CLIENT ${level:0:1} "admin:$password" pause idlewait
     if [ $? -ne 0 ]; then
         echo "ERROR: server 'pause idlewait' command failed" 1>&2
