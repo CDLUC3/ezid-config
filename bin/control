@@ -40,6 +40,15 @@ function pauseEzid {
     fi
 }
 
+function execExerciseEzid {
+  # The various components of EZID are loaded on demand.  The
+  # following request does not cause everything to be loaded and
+  # tested, but it does confirm that Apache, mod_wsgi, Django, and
+  # EZID are basically functioning.
+  echo "Exercising the server..."
+  exec $WGET -q -T 60 -t 1 -O /dev/null http://$HOSTNAME/status
+}
+
 case $1 in
     start)
         pid=`ps -fU ezid | grep '[d]ownserver' | head -1 | awk '{ print $2 }'`
@@ -52,12 +61,7 @@ case $1 in
         $APACHECTL start
         status=$?
         if [ $status -ne 0 ]; then exit $status; fi
-        # The various components of EZID are loaded on demand.  The
-        # following request does not cause everything to be loaded and
-        # tested, but it does confirm that Apache, mod_wsgi, Django,
-        # and EZID are basically functioning.
-        echo "Exercising the server..."
-        exec $WGET -q -T 60 -t 1 -O /dev/null http://$HOSTNAME/status
+        execExerciseEzid
         ;;
     stop)
         pauseEzid
@@ -71,7 +75,10 @@ case $1 in
         ;&
     force-restart)
         echo "Restarting the server..."
-        exec $APACHECTL restart
+        $APACHECTL restart
+        status=$?
+        if [ $status -ne 0 ]; then exit $status; fi
+        execExerciseEzid
         ;;
     status)
         pidcount=`ps -fU ezid | grep -c '[h]ttpd'`
