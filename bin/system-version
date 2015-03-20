@@ -1,0 +1,59 @@
+#! /usr/bin/env python
+
+# Prints the version of the system; useful for determining if two
+# systems are running the same software.  The version is essentially
+# the output from running "yum list installed" except that only the
+# most recently installed version of each package is included and
+# repository locations are removed.  By default only a hash of the
+# list is printed, but if the "-v" option is given the whole list is
+# printed.
+#
+# Greg Janee <gjanee@ucop.edu>
+# March 2015
+
+import hashlib
+import re
+import subprocess
+import sys
+
+YUM = "/usr/bin/yum"
+
+def error (message):
+  sys.stderr.write(message % sys.argv[0])
+  sys.stderr.write("\n")
+  sys.exit(1)
+
+if len(sys.argv) == 2 and sys.argv[1] == "-v":
+  verbose = True
+elif len(sys.argv) == 1:
+  verbose = False
+else:
+  error("usage: %s [-v]")
+
+p = subprocess.Popen([YUM, "list", "installed"], stdout=subprocess.PIPE)
+yumlist = p.communicate()[0]
+if p.returncode != 0: error("%s: yum command failed")
+
+m = re.match(".*Installed Packages\n", yumlist, re.S)
+if m == None: error("%s: error parsing yum output")
+yumlist = yumlist[len(m.group(0)):]
+
+# Yum sometimes splits records across lines, a PITA, so we just
+# tokenize the whole listing.
+yumlist = yumlist.split()
+if len(yumlist)%3 != 0: error("%s: error tokenizing yum output")
+
+d = {}
+for i in range(0, len(yumlist), 3):
+  # Assumption in the following: the most recently installed version
+  # is the last listed.
+  d[yumlist[i]] = yumlist[i+1]
+s = ""
+for k in sorted(d.keys()): s += "%s => %s\n" % (k, d[k])
+
+if verbose:
+  print s,
+else:
+  h = hashlib.md5()
+  h.update(s)
+  print h.hexdigest()
