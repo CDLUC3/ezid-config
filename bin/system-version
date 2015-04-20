@@ -48,12 +48,9 @@ for i in range(0, len(yumlist), 3):
   # Assumption in the following: the most recently installed version
   # is the last listed.
   d[yumlist[i]] = yumlist[i+1]
-s = ""
-for k in sorted(d.keys()): s += "%s => %s\n" % (k, d[k])
+output = "".join("%s => %s\n" % (k, d[k]) for k in sorted(d.keys()))
 
 if verbose:
-  print s,
+  print output,
 else:
-  h = hashlib.md5()
-  h.update(s)
-  print h.hexdigest()
+  print hashlib.md5(output).hexdigest()
