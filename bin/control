@@ -14,11 +14,22 @@ if [ $# -ne 1 ]; then
     exit 1
 fi
 
+function checkStatus {
+    if [ $status -eq 0 ]; then
+        echo "OK"
+    else
+        echo "FAILED"
+        exit 1
+    fi
+}
+
 function pauseEzid {
+    echo "Pausing the server..."
     pidcount=`ps -fU ezid | grep -c '[h]ttpd'`
     if [ $pidcount -eq 0 ]; then
-       echo "Pausing the server... (doesn't appear to be running)"
-       return
+        echo "(server doesn't appear to be running)"
+        status=0
+        return
     fi
     level=${DJANGO_SETTINGS_MODULE#*.}
     # The parsing below is far from foolproof, but we do at least look
@@ -27,58 +38,59 @@ function pauseEzid {
     if [ "$password" == "" ]; then
         password=`grep '^admin_password: [^ ]' $SHADOWFILE`
         if [ "$password" == "" ]; then
-            echo "ERROR: unable to locate admin password" 1>&2
-            exit 1
+            echo "unable to locate admin password"
+            status=1
+            return
         fi
     fi
     password=${password#*: }
-    echo "Pausing the server..."
     $CLIENT http://$HOSTNAME "admin:$password" pause idlewait
-    if [ $? -ne 0 ]; then
-        echo "ERROR: server 'pause idlewait' command failed" 1>&2
-        exit 1
-    fi
+    status=$?
 }
 
-function execExerciseEzid {
+function exerciseEzid {
   # The various components of EZID are loaded on demand.  The
   # following request does not cause everything to be loaded and
   # tested, but it does confirm that Apache, mod_wsgi, Django, and
   # EZID are basically functioning.
   echo "Exercising the server..."
-  exec $WGET -q -T 10 -t 1 -O /dev/null http://$HOSTNAME/status
+  $WGET -q -T 10 -t 1 -O /dev/null http://$HOSTNAME/status
+  status=$?
 }
+
+# N.B.: We avoid Apache's "graceful" command as it doesn't work due to
+# our long mod_wsgi shutdown timeout.
 
 case $1 in
     start)
-        pid=`ps -fU ezid | grep '[d]ownserver' | head -1 | awk '{ print $2 }'`
-        if [ "$pid" != "" ]; then
-            echo
-            echo "!!! The downserver might be running; see PID $pid"
-            echo
-        fi
         echo "Starting the server..."
         $APACHECTL start
         status=$?
-        if [ $status -ne 0 ]; then exit $status; fi
-        execExerciseEzid
+        checkStatus
+        exerciseEzid
+        checkStatus
         ;;
     stop)
         pauseEzid
+        checkStatus
         ;&
     force-stop)
         echo "Stopping the server..."
-        exec $APACHECTL stop
+        $APACHECTL stop
+        status=$?
+        checkStatus
         ;;
     restart)
         pauseEzid
+        checkStatus
         ;&
     force-restart)
         echo "Restarting the server..."
         $APACHECTL restart
         status=$?
-        if [ $status -ne 0 ]; then exit $status; fi
-        execExerciseEzid
+        checkStatus
+        exerciseEzid
+        checkStatus
         ;;
     status)
         pidcount=`ps -fU ezid | grep -c '[h]ttpd'`
@@ -101,7 +113,7 @@ case $1 in
                     echo "down (unresponsive)"
                     exit 1
                 else
-                    echo "up (maybe; there appear to be network problems)"
+                    echo "up (maybe; there might be network problems)"
                     exit 0
                 fi
             fi
