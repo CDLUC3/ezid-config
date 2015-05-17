@@ -1,9 +1,8 @@
 #! /bin/bash
 
-USAGE="Usage: $0 start|stop|kill|restart|force-restart|status"
+USAGE="Usage: $0 start|stop|force-stop|restart|force-restart|status"
 APACHECTL=/ezid/apache/bin/apachectl
-WGET=/opt/csw/bin/wget
-SENTINEL=/ezid/init.d/VCS_MONITOR_DISABLED
+WGET=/usr/bin/wget
 PR=/ezid/apache/ezid/SITE/PROJECT
 SHADOWFILE=$PR/settings/ezid.conf.shadow
 CLIENT=$PR/tools/client
@@ -15,7 +14,23 @@ if [ $# -ne 1 ]; then
     exit 1
 fi
 
+function checkStatus {
+    if [ $status -eq 0 ]; then
+        echo "OK"
+    else
+        echo "FAILED"
+        exit 1
+    fi
+}
+
 function pauseEzid {
+    echo "Pausing the server..."
+    pidcount=`ps -fU ezid | grep -c '[h]ttpd'`
+    if [ $pidcount -eq 0 ]; then
+        echo "(server doesn't appear to be running)"
+        status=0
+        return
+    fi
     level=${DJANGO_SETTINGS_MODULE#*.}
     # The parsing below is far from foolproof, but we do at least look
     # for a deployment-level-specific value before a generic value.
@@ -23,81 +38,88 @@ function pauseEzid {
     if [ "$password" == "" ]; then
         password=`grep '^admin_password: [^ ]' $SHADOWFILE`
         if [ "$password" == "" ]; then
-            echo "ERROR: unable to locate admin password" 1>&2
-            exit 1
+            echo "unable to locate admin password"
+            status=1
+            return
         fi
     fi
     password=${password#*: }
-    echo "Waiting for the system to become quiescent..."
-    $CLIENT ${level:0:1} "admin:$password" pause idlewait
-    if [ $? -ne 0 ]; then
-        echo "ERROR: server 'pause idlewait' command failed" 1>&2
-        exit 1
-    fi
+    $CLIENT http://$HOSTNAME "admin:$password" pause idlewait
+    status=$?
 }
+
+function exerciseEzid {
+  # The various components of EZID are loaded on demand.  The
+  # following request does not cause everything to be loaded and
+  # tested, but it does confirm that Apache, mod_wsgi, Django, and
+  # EZID are basically functioning.
+  echo "Exercising the server..."
+  $WGET -q -T 10 -t 1 -O /dev/null http://$HOSTNAME/status
+  status=$?
+}
+
+# N.B.: We avoid Apache's "graceful" command as it doesn't work due to
+# our long mod_wsgi shutdown timeout.
 
 case $1 in
     start)
-        pid=`ps -fU ezid | grep '[d]ownserver' | head -1 | awk '{ print $2 }'`
-        if [ "$pid" != "" ]; then
-            echo
-            echo "!!! The downserver might be running; see PID $pid"
-            echo
-        fi
-        exec $APACHECTL start
+        echo "Starting the server..."
+        $APACHECTL start
+        status=$?
+        checkStatus
+        exerciseEzid
+        checkStatus
         ;;
     stop)
         pauseEzid
+        checkStatus
+        ;&
+    force-stop)
         echo "Stopping the server..."
-        exec $APACHECTL stop
-        ;;
-    kill)
-        echo "Stopping the server..."
-        exec $APACHECTL stop
+        $APACHECTL stop
+        status=$?
+        checkStatus
         ;;
     restart)
         pauseEzid
-        echo "Restarting the server..."
-        exec $APACHECTL restart
-        ;;
+        checkStatus
+        ;&
     force-restart)
         echo "Restarting the server..."
-        exec $APACHECTL restart
+        $APACHECTL restart
+        status=$?
+        checkStatus
+        exerciseEzid
+        checkStatus
         ;;
     status)
-        if [ -f $SENTINEL ]; then
-            # Fake out VCS.
-            echo "up (by virtue of VCS fakeout)"
-            exit 0
-        else
-            pidcount=`ps -fU ezid | grep -c '[h]ttpd'`
-            if [ $pidcount -gt 0 ]; then
-                # The server appears to be running; check that it's
-                # responsive.
-                $WGET -q -T 60 -t 1 -O /dev/null http://$HOSTNAME/status
+        pidcount=`ps -fU ezid | grep -c '[h]ttpd'`
+        if [ $pidcount -gt 0 ]; then
+            # The server appears to be running; check that it's
+            # responsive.
+            $WGET -q -T 10 -t 1 -O /dev/null http://$HOSTNAME/status
+            status=$?
+            if [ $status -eq 0 ]; then
+                echo "up"
+                exit 0
+            else
+                # Not responsive.  Is it an EZID problem or a
+                # network/DNS problem?  Try connecting to another
+                # CDL production service.
+                $WGET -q -T 10 -t 1 -O /dev/null http://n2t.net/
                 status=$?
                 if [ $status -eq 0 ]; then
-                    echo "up"
-                    exit 0
+                    # It appears to be EZID's problem.
+                    echo "down (unresponsive)"
+                    exit 1
                 else
-                    # Not responsive.  Is it an EZID problem or a
-                    # network/DNS problem?  Try connecting to another
-                    # CDL production service.
-                    $WGET -q -T 10 -t 1 -O /dev/null http://www.cdlib.org/
-                    status=$?
-                    if [ $status -eq 0 ]; then
-                        # It appears to be EZID's problem.
-                        echo "down (unresponsive)"
-                        exit 1
-                    else
-                        echo "up (maybe; there appear to be network problems)"
-                        exit 0
-                    fi
+                    echo "up (maybe; there might be network problems)"
+                    exit 0
                 fi
-            else
-                echo "down (not running)"
-                exit 1
             fi
+        else
+            echo "down (not running)"
+            exit 1
         fi
         ;;
     *)

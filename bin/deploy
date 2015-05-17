@@ -91,7 +91,7 @@ import time
 import mypxssh
 
 ROLE_ACCOUNT = "ezid"
-ROLE_ACCOUNT_COMMAND = "/cdlcommon/products/bin/sudo su - " + ROLE_ACCOUNT
+ROLE_ACCOUNT_COMMAND = "/usr/bin/sudo su - " + ROLE_ACCOUNT
 ROLE_ACCOUNT_PROMPT = r"%"
 APACHE_ROOT = "/ezid/apache"
 APACHE_ACCESS_LOG = APACHE_ROOT + "/logs/access_log"
@@ -107,10 +107,10 @@ REPOSITORIES = [
 
 INSTANCES = [
   # (abbreviation, name, hostname, EZID client code)
-  ("dev", "development", "ezid-dev.cdlib.org", "d"),
-  ("stg", "staging", "ezid-stg.cdlib.org", "s"),
-  ("wfl", "workflow", "ezid-wf.cdlib.org", "w"),
-  ("prd", "production", "ezid.cdlib.org", "p")]
+  ("dev", "development", "ias-ezid-dev.cdlib.org", "d"),
+  ("stg", "staging", "ias-ezid-stg.cdlib.org", "s"),
+  ("wfl", "workflow", "ias-ezid-wf-stg.cdlib.org", "w"),
+  ("prd", "production", "ias-ezid-prd.cdlib.org", "p")]
 
 _answerBank = None
 _logfile = None
