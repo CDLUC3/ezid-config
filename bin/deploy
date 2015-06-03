@@ -97,7 +97,8 @@ APACHE_ROOT = "/ezid/apache"
 APACHE_ACCESS_LOG = APACHE_ROOT + "/logs/access_log"
 APACHE_RESTART_COMMAND = "/ezid/init.d/apache restart"
 EZID_ROOT = "/ezid/apache/ezid/SITE/PROJECT"
-HG_SERVER = "hg.cdlib.org"
+HG_SERVER = "bitbucket.org"
+HG_PATH = "/cdl"
 
 REPOSITORIES = [
   # (selection code, name on HG_SERVER, local directory)
@@ -342,7 +343,7 @@ def checkRepositoryStatus ():
 
 def pullChangesets ():
   pr("Pulling changesets...")
-  command = "hg pull https://%s@%s/%s" % (_hgUsername, HG_SERVER,
+  command = "hg pull https://%s@%s%s/%s" % (_hgUsername, HG_SERVER, HG_PATH,
     _repository[1])
   _ssh.sendline(command)
   _ssh.expect("password: ")
