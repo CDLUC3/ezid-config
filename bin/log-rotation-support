@@ -1,0 +1,30 @@
+#! /bin/bash
+
+# Support for rotation and culling of access log files.  This script
+# runs in conjunction with an Apache rotatelogs configuration, and
+# should be run via cron shortly after rotatelogs ever rotates a log
+# file (typically at midnight).  Does two things: 1) keeps only the
+# most recent 6 files; and 2) creates a symlink from "access_log" to
+# the most recent log file.  The latter is needed because our older
+# version of rotatelogs doesn't support creating links or much of
+# anything else.
+#
+# Greg Janee <gjanee@ucop.edu>
+# July 2015
+
+KEEP=6
+
+cd /ezid/apache/logs
+
+shopt -s nullglob
+logs=(access_log.*)
+
+while [ ${#logs[@]} -gt $KEEP ]; do
+  rm ${logs[0]}
+  logs=(${logs[@]:1})
+done
+
+if [ ${#logs[@]} -gt 0 ]; then
+  if [ -L access_log ]; then rm access_log; fi
+  ln -s ${logs[${#logs[@]}-1]} access_log
+fi
