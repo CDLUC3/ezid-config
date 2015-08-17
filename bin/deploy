@@ -38,10 +38,10 @@
 #     5 <repository> password?
 #     6 Deploy new shadow config file?
 #     7 Directory containing shadow config file?
-#     8 Deploy to <instance>?
 #
 # Instance-specific questions:
 #
+#     8 Deploy to <instance>?
 #     9 Repository is not clean.  Action?
 #    10 Update to which branch or changeset?
 #    11 Enter any branch, tag, or changeset identifier.
@@ -575,7 +575,6 @@ if _repository[1] == "ezid" and\
 # Main processing.
 
 for instance in INSTANCES:
-  _instance = None
+  _instance = instance
   if askYesNo(8, "Deploy to %s (%s)?" % (instance[1], instance[2])):
-    _instance = instance
     deploy()
