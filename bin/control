@@ -34,9 +34,9 @@ function pauseEzid {
     level=${DJANGO_SETTINGS_MODULE#*.}
     # The parsing below is far from foolproof, but we do at least look
     # for a deployment-level-specific value before a generic value.
-    password=`grep '^{'$level'}admin_password: [^ ]' $SHADOWFILE`
+    password=`grep -m1 '^{'$level'}admin_password: [^ ]' $SHADOWFILE`
     if [ "$password" == "" ]; then
-        password=`grep '^admin_password: [^ ]' $SHADOWFILE`
+        password=`grep -m1 '^admin_password: [^ ]' $SHADOWFILE`
         if [ "$password" == "" ]; then
             echo "unable to locate admin password"
             status=1

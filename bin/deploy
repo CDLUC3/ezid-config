@@ -410,10 +410,10 @@ def getAdminPassword ():
   o = execute("cat settings/ezid.conf.shadow")
   cp = ConfigParser.ConfigParser()
   cp.readfp(StringIO.StringIO(o))
-  if cp.has_option("ldap", "{%s}admin_password" % _instance[1]):
-    _adminPassword = cp.get("ldap", "{%s}admin_password" % _instance[1])
+  if cp.has_option("auth", "{%s}admin_password" % _instance[1]):
+    _adminPassword = cp.get("auth", "{%s}admin_password" % _instance[1])
   else:
-    _adminPassword = cp.get("ldap", "admin_password")
+    _adminPassword = cp.get("auth", "admin_password")
   pr("OK")
 
 def reloadEzid ():
