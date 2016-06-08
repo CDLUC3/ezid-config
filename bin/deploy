@@ -349,8 +349,7 @@ def pullChangesets ():
   _ssh.expect("password: ")
   o = execute(_hgPassword, False, False, command)
   ol = o.splitlines()
-  assert len(ol) >= 3 and ol[0].startswith("pulling from") and\
-    ol[1].startswith("searching for") and\
+  assert len(ol) >= 2 and ol[0].startswith("searching for") and\
     (re.search("^no changes found", o, re.M) or\
     re.search("^added \d+ changesets", o, re.M)), "hg pull failed:\n" + o
   pr("OK")
