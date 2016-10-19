@@ -28,6 +28,7 @@ case $1 in
             exit 1
         fi
         echo $pid > $pidfile
+        monit -c ~/.monitrc
         ;;
     stop)
         if [ ! -e $pidfile ]; then
@@ -36,6 +37,7 @@ case $1 in
         fi
         pid=$(cat $pidfile)
         if [ -e /proc/$pid ]; then
+            monit -c ~/.monitrc quit
             kill $pid
         else
             echo "No process to kill; removing PID file" >&2
