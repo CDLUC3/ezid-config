@@ -108,7 +108,7 @@ REPOSITORIES = [
 
 INSTANCES = [
   # (abbreviation, name, hostname, EZID client code)
-  ("dev", "development", "ias-ezid-dev.cdlib.org", "d"),
+  ("dev", "development", "ids-ezid-dev.cdlib.org", "d"),
   ("stg", "staging", "ias-ezid-stg.cdlib.org", "s"),
   ("prd", "production", "ias-ezid-prd.cdlib.org", "p")]
 
