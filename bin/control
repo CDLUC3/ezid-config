@@ -44,7 +44,7 @@ function pauseEzid {
         fi
     fi
     password=${password#*: }
-    $CLIENT http://$HOSTNAME "admin:$password" pause idlewait
+    $CLIENT https://$HOSTNAME "admin:$password" pause idlewait
     status=$?
 }
 
@@ -54,7 +54,7 @@ function exerciseEzid {
   # tested, but it does confirm that Apache, mod_wsgi, Django, and
   # EZID are basically functioning.
   echo "Exercising the server..."
-  $WGET -q -T 10 -t 1 -O /dev/null http://$HOSTNAME/status
+  $WGET -q -T 10 -t 1 -O /dev/null https://$HOSTNAME/status
   status=$?
 }
 
@@ -97,7 +97,7 @@ case $1 in
         if [ $pidcount -gt 0 ]; then
             # The server appears to be running; check that it's
             # responsive.
-            $WGET -q -T 10 -t 1 -O /dev/null http://$HOSTNAME/status
+            $WGET -q -T 10 -t 1 -O /dev/null https://$HOSTNAME/status
             status=$?
             if [ $status -eq 0 ]; then
                 echo "up"
