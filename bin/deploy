@@ -110,7 +110,7 @@ INSTANCES = [
   # (abbreviation, name, hostname, EZID client code)
   ("dev", "development", "ids-ezid-dev.cdlib.org", "d"),
   ("stg", "staging", "ids-ezid-stg.cdlib.org", "s"),
-  ("prd", "production", "ias-ezid-prd.cdlib.org", "p")]
+  ("prd", "production", "ids-ezid-prd.cdlib.org", "p")]
 
 _answerBank = None
 _logfile = None
