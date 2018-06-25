@@ -3,6 +3,8 @@
 USAGE="Usage: $0 start|stop"
 SR=/ezid/apache/ezid/SITE
 PR=$SR/PROJECT
+LF=$SR/logs/link-checker.log
+EF=$SR/logs/link-checker.excludes
 pidfile=$SR/logs/link-checker.pid
 
 if [ $# -ne 1 ]; then
@@ -20,7 +22,7 @@ case $1 in
             fi
             rm $pidfile
         fi
-        $PR/tools/link-checker < /dev/null &>> $SR/logs/link-checker.log &
+        $PR/tools/link-checker $EF < /dev/null &>> $LF &
         pid=$!
         sleep 1
         if [ ! -e /proc/$pid ]; then
