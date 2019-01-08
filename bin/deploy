@@ -49,7 +49,7 @@
 #    13 Most recent server activity shown.  Action?
 #
 # The sample file below reloads all instances, deploying the
-# production branch to all instances except for the development
+# production branch to all instances except for the staging
 # instance, which receives the default branch.
 #
 #    [DEFAULT]
@@ -62,7 +62,7 @@
 #    10: production
 #    12: reload EZID
 #
-#    [development]
+#    [staging]
 #    10: default
 #
 # Caution: it is possible for pre-loaded answers to cause an infinite
@@ -108,7 +108,6 @@ REPOSITORIES = [
 
 INSTANCES = [
   # (abbreviation, name, hostname, EZID client code)
-  ("dev", "development", "ids-ezid-dev.cdlib.org", "d"),
   ("stg", "staging", "ids-ezid-stg.cdlib.org", "s"),
   ("prd", "production", "ids-ezid-prd.cdlib.org", "p")]
 
@@ -375,9 +374,8 @@ def updateRepository ():
   branch = askEnum(10, "Update to which branch or changeset?",
     [("p", "production"), ("d", "default"), ("o", "other"), ("a", "abandon")],
     returnFunc=second,
-    extraLines=["Guideline: all instances but 'development' should",
-    "generally run the production branch.  The branch run",
-    "by the 'development' instance is variable."])
+    extraLines=["Guideline: all instances should generally run the",
+    "production branch."])
   if branch == "abandon":
     abandon()
   elif branch == "other":
