@@ -10,11 +10,12 @@
 # anything else.
 #
 # Greg Janee <gjanee@ucop.edu>
+# Rushiraj Nenuji <rnenuji@ucop.edu>
 # July 2015
 
 KEEP=6
 
-cd /ezid/apache/logs
+cd /apps/ezid/apps/apache/logs
 
 shopt -s nullglob
 logs=(access_log.*)

@@ -9,7 +9,8 @@
 # printed.
 #
 # Greg Janee <gjanee@ucop.edu>
-# March 2015
+# Rushiraj Nenuji <rnenuji@ucop.edu>
+# October 2019
 
 import hashlib
 import re

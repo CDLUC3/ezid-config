@@ -1,13 +1,13 @@
 #! /bin/bash
 
 USAGE="Usage: $0 start|stop|force-stop|restart|force-restart|status"
-APACHECTL=/ezid/apache/bin/apachectl
+APACHECTL=/apps/ezid/apps/apache/bin/apachectl
 WGET=/usr/bin/wget
-PR=/ezid/apache/ezid/SITE/PROJECT
+PR=/apps/ezid/apps/apache/ezid/SITE/PROJECT
 SHADOWFILE=$PR/settings/ezid.conf.shadow
 CLIENT=$PR/tools/client
 
-. /ezid/apache/WARTS/env.sh
+. /apps/ezid/apps/apache/WARTS/env.sh
 
 if [ $# -ne 1 ]; then
     echo $USAGE
@@ -54,7 +54,7 @@ function exerciseEzid {
   # tested, but it does confirm that Apache, mod_wsgi, Django, and
   # EZID are basically functioning.
   echo "Exercising the server..."
-  $WGET -q -T 10 -t 1 -O /dev/null https://$HOSTNAME/status
+  $WGET -q -T 10 -t 1 -O /dev/null http://$HOSTNAME/status
   status=$?
 }
 

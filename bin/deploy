@@ -93,10 +93,10 @@ import mypxssh
 ROLE_ACCOUNT = "ezid"
 ROLE_ACCOUNT_COMMAND = "/usr/bin/sudo su - " + ROLE_ACCOUNT
 ROLE_ACCOUNT_PROMPT = r"%"
-APACHE_ROOT = "/ezid/apache"
+APACHE_ROOT = "/apps/ezid/apps/apache"
 APACHE_ACCESS_LOG = APACHE_ROOT + "/logs/access_log"
-APACHE_RESTART_COMMAND = "/ezid/init.d/apache restart"
-EZID_ROOT = "/ezid/apache/ezid/SITE/PROJECT"
+APACHE_RESTART_COMMAND = "/apps/ezid/init.d/apache restart"
+EZID_ROOT = "/apps/ezid/apps/apache/ezid/SITE/PROJECT"
 HG_SERVER = "bitbucket.org"
 HG_PATH = "/cdl"
 
@@ -108,7 +108,7 @@ REPOSITORIES = [
 
 INSTANCES = [
   # (abbreviation, name, hostname, EZID client code)
-  ("stg", "staging", "ids-ezid-stg.cdlib.org", "s"),
+  ("stg", "staging", "uc3-ezidx2-stg.cdlib.org", "s"),
   ("prd", "production", "ids-ezid-prd.cdlib.org", "p")]
 
 _answerBank = None
@@ -573,4 +573,4 @@ if _repository[1] == "ezid" and\
 for instance in INSTANCES:
   _instance = instance
   if askYesNo(8, "Deploy to %s (%s)?" % (instance[1], instance[2])):
-    deploy()
+      deploy()

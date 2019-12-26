@@ -41,14 +41,14 @@ ARGV="$@"
 # --------------------                              --------------------
 # 
 # Local "warts"
-. /ezid/apache/WARTS/env.sh
+. /apps/ezid/apps/apache/WARTS/env.sh
 #
 # the path to your httpd binary, including options if necessary
-HTTPD='/ezid/sw/httpd/bin/httpd -f /ezid/apache/conf/httpd.conf'
+HTTPD='/apps/ezid/sw/httpd/bin/httpd -f /apps/ezid/apps/apache/conf/httpd.conf'
 #
 # pick up any necessary environment variables
-if test -f /ezid/sw/httpd/bin/envvars; then
-  . /ezid/sw/httpd/bin/envvars
+if test -f /apps/ezid/sw/httpd/bin/envvars; then
+  . /apps/ezid/sw/httpd/bin/envvars
 fi
 #
 # a command that outputs a formatted text version of the HTML at the
@@ -58,7 +58,7 @@ LYNX="lynx -dump"
 #
 # the URL to your server's mod_status status page.  If you do not
 # have one, then status and fullstatus will not work.
-STATUSURL="http://localhost:80/server-status"
+STATUSURL="http://localhost:18880/server-status"
 #
 # Set this variable to a command that increases the maximum
 # number of file descriptors allowed per child process. This is

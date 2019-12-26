@@ -5,9 +5,9 @@
 # Usage: start-downserver downtime [message]
 # 'downtime' is the anticipated down time in seconds.
 
-WART_DIR=/ezid/apache/WARTS
+WART_DIR=/apps/ezid/apps/apache/WARTS
 HTTPD_CONF=$WART_DIR/httpd.conf
-DOWNSERVER=/ezid/apache/ezid/SITE/PROJECT/tools/downserver
+DOWNSERVER=/apps/ezid/apps/apache/ezid/SITE/PROJECT/tools/downserver
 HTTP_LOG=/tmp/downserver.http.log
 HTTPS_LOG=/tmp/downserver.https.log
 
